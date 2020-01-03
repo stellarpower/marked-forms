@@ -38,6 +38,7 @@ module.exports = function markedForms(renderer, marked) {
   patch(renderer, 'listitem', listitem);
   patch(renderer, 'list', list);
   patch(renderer, 'paragraph', paragraph);  
+  patch(renderer, 'checkbox', checkbox);
 
   return renderer;
 };
@@ -57,17 +58,27 @@ function link(href, title, text) {
   return fallback.link.call(this, href, title, text);
 }
 
+
+var currentlyChecked;    
+
+function checkbox(checked){
+  currentlyChecked = checked
+  return ""
+}
+
 // capture listitems for select, checklist, radiolist
 function listitem(text) {
   if (inList()) {
-
+    
     // capture value in trailing "text" - unescape makes regexp work
     var m = unescapeQuotes(text).match(/^(.*)\s+"([^"]*)"\s*$/);
 
     var txt = m ? escapeQuotes(m[1]) : text;
     var val = m ? escapeQuotes(m[2]) : text;
 
-    return renderOption(txt, val);
+    var result = renderOption(txt, val, currentlyChecked);
+    currentlyChecked = undefined; //'pop' by resetting
+    return result;
   }
   return fallback.listitem.call(this, text);
 }
@@ -159,12 +170,15 @@ function renderInput(text, type, required, checked, hidden, name, css, labelFirs
   return out;
 }
 
-function renderOption(text, value) {
+function renderOption(text, value, checked) {
   var out;
   var list = listState;
 
+  var checkedAttribute = {checklist:'checked', radiolist:'checked', select: 'selected'}[list.type]
+  var checkedText = attr(checkedAttribute, undefined, checked)
+   
   if (list.type === 'select') {
-    out = '\n<option' + attr('name', list.name) + attr('value', value, true) + '>' ;
+    out = '\n<option' + attr('name', list.name) + attr('value', value, true) + checkedText + '>' ;
     return out + text + '</option>';
   }
 
@@ -172,7 +186,7 @@ function renderOption(text, value) {
   var openLabel = text ? '\n<label' + attr('class', type) + '>' : '';
   var closeLabel = text ? '</label>' : '';
 
-  out = '<input' + attr('type', type) + attr('name', list.name) + attr('value', value, true) + '>' ;
+  out = '<input' + attr('type', type) + attr('name', list.name) + checkedText + attr('value', value, true) + '>' ;
 
   if (list.labelFirst) return openLabel + text + out + closeLabel;
   return openLabel + out + text + closeLabel;
@@ -206,7 +220,7 @@ function endList() {
 // utility
 
 function attr(nme, val, all) {
-  return val || all ? ' ' + nme + '="' + escapeQuotes(val) + '"' : '';
+  return val || all ? ' ' + nme + (val !== undefined ? '="' + escapeQuotes(val.toString()) + '"' : '' ) : '';
 }
 
 function escapeQuotes(s) {
